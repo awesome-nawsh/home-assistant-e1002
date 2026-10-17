@@ -1,17 +1,17 @@
 # =============================================================================
 # reTerminal E1002 — Hallway e-paper panel (battery, deep sleep)
-# Flow: boot → Wi-Fi → fetch Puppet PNG of /e1002-hallway/hallway →
-#       draw → deep sleep → repeat every ${sleep_minutes} min
-# Target: ESPHome 2026.9.x  |  Pins per Seeed reTerminal E cookbooks
+# Flow: boot → Wi-Fi → GET <scheduler>/api/image (server picks the scheduled screen)
+#       → draw → POST battery report → GET /api/sleep → deep sleep that many seconds
+# Target: ESPHome 2026.9.x  |  Pins hardware-verified 2026-10-17
 # =============================================================================
 substitutions:
   name: e1002-hallway
   friendly_name: "E1002 Hallway"
-  # Puppet add-on renders the Lovelace view. Use HA's IP if mDNS is flaky on the ESP.
-  dashboard_url: "http://homeassistant.local:10000/e1002-hallway/hallway?kiosk&viewport=800x480&format=png&colors=000000,FFFFFF,FF0000,00FF00,0000FF,FFFF00&next=600"
-  sleep_minutes: "10"
-  # Spectra-6 full refresh is slow; give the panel time to finish before sleeping.
-  refresh_settle: 40s
+  device_id: e1002
+  # E1002 Scheduler add-on (port 8098). Use HA's LAN IP if mDNS is unreliable from the ESP.
+  scheduler_url: "http://homeassistant.local:8098"
+  fallback_sleep: "10"      # minutes, used only if the scheduler can't be reached
+  refresh_settle: 40s       # Spectra-6 full refresh time before sleeping
 
 esphome:
   name: ${name}
@@ -22,7 +22,7 @@ esphome:
         - output.turn_on: battery_enable
     - priority: -100   # after Wi-Fi/API are up
       then:
-        - script.execute: refresh_and_sleep
+        - script.execute: wake_cycle
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -42,7 +42,7 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: true
-  power_save_mode: none  # we deep-sleep instead; keep the short awake window quick
+  power_save_mode: none
   ap:
     ssid: "${name} Fallback"
 
@@ -53,12 +53,17 @@ api:
     key: !secret api_encryption_key
 
 ota:
-  - platform: esphome
-    password: !secret ota_password
+  - platform: esphome      # authenticated by the API encryption key; no separate password
 
 http_request:
+  id: http
   verify_ssl: false
   timeout: 20s
+
+globals:
+  - id: sleep_seconds
+    type: int
+    initial_value: "${fallback_sleep} * 60"
 
 # --- Display ------------------------------------------------------------------
 spi:
@@ -75,47 +80,89 @@ display:
     busy_pin:
       number: GPIO13
       inverted: true
-    update_interval: never   # we drive updates explicitly
+    update_interval: never
     lambda: |-
       it.image(0, 0, id(dashboard));
 
-online_image:
-  - id: dashboard
-    url: ${dashboard_url}
+image:
+  - platform: online_image
+    id: dashboard
+    url: "${scheduler_url}/api/image?device=${device_id}"
     format: PNG
     type: RGB565
     resize: 800x480
     update_interval: never
     on_download_finished:
       then:
-        - logger.log: "Dashboard image downloaded, drawing"
+        - logger.log: "Image downloaded, drawing"
         - component.update: epaper
         - delay: ${refresh_settle}
-        - logger.log: "Entering deep sleep"
-        - deep_sleep.enter: sleeper
+        - script.execute: finish_and_sleep
     on_error:
       then:
         - logger.log:
             level: WARN
-            format: "Dashboard download failed — sleeping without update"
-        - deep_sleep.enter: sleeper
+            format: "Image download failed — keeping last image"
+        - script.execute: finish_and_sleep
 
 script:
-  - id: refresh_and_sleep
+  - id: wake_cycle
     mode: single
     then:
       - wait_until:
           condition:
             wifi.connected:
           timeout: 30s
-      - delay: 2s   # let API connect so battery value reaches HA
+      - delay: 2s
       - component.update: dashboard
+
+  - id: finish_and_sleep
+    mode: single
+    then:
+      # 1. report battery / signal to the scheduler (best effort)
+      - http_request.post:
+          url: "${scheduler_url}/api/report?device=${device_id}"
+          request_headers:
+            Content-Type: application/json
+          body: !lambda |-
+            char buf[96];
+            snprintf(buf, sizeof(buf), "{\"battery_pct\":%d,\"battery_v\":%.2f,\"rssi\":%d}",
+                     (int) id(battery_pct).state, id(battery_voltage).state, (int) id(wifi_rssi).state);
+            return std::string(buf);
+          on_error:
+            - logger.log:
+                level: WARN
+                format: "Battery report failed"
+      # 2. ask how long to sleep
+      - http_request.get:
+          url: "${scheduler_url}/api/sleep?device=${device_id}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  int s = atoi(body.c_str());
+                  if (s >= 60 && s <= 6 * 3600) {
+                    id(sleep_seconds) = s;
+                    ESP_LOGI("sched", "Scheduler says sleep %d s", s);
+                  } else {
+                    ESP_LOGW("sched", "Bad sleep value '%s', using fallback", body.c_str());
+                  }
+          on_error:
+            - logger.log:
+                level: WARN
+                format: "Sleep query failed — using fallback"
+      # 3. sleep
+      - logger.log:
+          format: "Entering deep sleep for %d s"
+          args: ["id(sleep_seconds)"]
+      - deep_sleep.enter:
+          id: sleeper
+          sleep_duration: !lambda "return (uint32_t) id(sleep_seconds) * 1000;"
 
 # --- Power --------------------------------------------------------------------
 deep_sleep:
   id: sleeper
-  sleep_duration: ${sleep_minutes}min
-  run_duration: 150s          # safety cap if anything hangs
+  run_duration: 180s          # safety cap if anything hangs
   wakeup_pin:
     number: GPIO4             # right white button: hold to wake for OTA
     inverted: true
@@ -132,7 +179,7 @@ sensor:
     id: battery_voltage
     name: "Battery Voltage"
     attenuation: 12db
-    update_interval: 5s      # a couple of samples per wake window
+    update_interval: 5s
     filters:
       - multiply: 2.0
     unit_of_measurement: V
@@ -140,6 +187,7 @@ sensor:
     device_class: voltage
   - platform: copy
     source_id: battery_voltage
+    id: battery_pct
     name: "Battery"
     unit_of_measurement: "%"
     device_class: battery
@@ -156,6 +204,7 @@ sensor:
           min_value: 0
           max_value: 100
   - platform: wifi_signal
+    id: wifi_rssi
     name: "WiFi Signal"
     update_interval: 10s
 

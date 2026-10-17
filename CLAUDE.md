@@ -5,9 +5,20 @@ Home Assistant dashboard. Firmware: ESPHome. Image source: Puppet add-on screens
 the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sleeps.
 
 ## Files
-- `e1002-hallway.yaml` — ESPHome config (the deliverable)
+- `e1002-hallway.yaml` — ESPHome config. Fetches `/api/image`, posts `/api/report`, reads `/api/sleep`
+  from the add-on, then deep-sleeps for the returned seconds (fallback 10 min if unreachable).
 - `dashboard.yaml` — Lovelace view (storage-mode dashboard `e1002-hallway`, view `hallway`)
+- `addon/e1002-scheduler/` — HA add-on: screens (HA path via Puppet, or URL via headless Chromium),
+  non-overlapping schedules, per-screen interval, 6-colour Floyd–Steinberg dithering, device API on
+  port 8098, Ingress UI. Data in `/data/screens.json`. `repository.yaml` at repo root installs it.
 - `secrets.yaml.example` — keys the config expects; real `secrets.yaml` is gitignored
+
+## Add-on dev loop
+- Edit under `addon/e1002-scheduler/`, bump `version` in `config.yaml`, push, then HA store → Update.
+- Local smoke test (no Chromium/Puppet needed; renders fall back to a placeholder PNG):
+  `OPTIONS_PATH=/x DATA_PATH=/tmp/s.json python3 -m uvicorn main:app --app-dir addon/e1002-scheduler/app`
+- Scheduler semantics: at most one active screen (overlap rejected on save); sleep =
+  min(interval, time to window end) when active, else time to next window start, clamped 60 s–6 h.
 
 ## Hardware facts (Seeed cookbooks, ESPHome 2026.9)
 - Display: `epaper_spi` model `Seeed-reTerminal-E1002`; SPI CLK 7 / MOSI 9; CS 10, DC 11, RESET 12, BUSY 13 (inverted)

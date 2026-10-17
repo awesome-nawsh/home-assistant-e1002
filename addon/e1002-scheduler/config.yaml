@@ -1,0 +1,27 @@
+name: E1002 Scheduler
+version: 0.1.0
+slug: e1002_scheduler
+description: Screens, schedules and sleep control for a battery e-paper display
+url: https://github.com/awesome-nawsh/home-assistant-e1002
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_port: 8098
+panel_icon: mdi:monitor-dashboard
+panel_title: E1002 Screens
+ports:
+  8098/tcp: 8098
+ports_description:
+  8098/tcp: Device API (the ESP32 fetches images and sleep time here)
+options:
+  puppet_url: "http://0f1cc410-puppet:10000"
+  timezone: "Asia/Singapore"
+  width: 800
+  height: 480
+schema:
+  puppet_url: str
+  timezone: str
+  width: int
+  height: int
