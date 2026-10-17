@@ -1,0 +1,170 @@
+# =============================================================================
+# reTerminal E1002 — Hallway e-paper panel (battery, deep sleep)
+# Flow: boot → Wi-Fi → fetch Puppet PNG of /e1002-hallway/hallway →
+#       draw → deep sleep → repeat every ${sleep_minutes} min
+# Target: ESPHome 2026.9.x  |  Pins per Seeed reTerminal E cookbooks
+# =============================================================================
+substitutions:
+  name: e1002-hallway
+  friendly_name: "E1002 Hallway"
+  # Puppet add-on renders the Lovelace view. Use HA's IP if mDNS is flaky on the ESP.
+  dashboard_url: "http://homeassistant.local:10000/e1002-hallway/hallway?kiosk&viewport=800x480&format=png&colors=000000,FFFFFF,FF0000,00FF00,0000FF,FFFF00&next=600"
+  sleep_minutes: "10"
+  # Spectra-6 full refresh is slow; give the panel time to finish before sleeping.
+  refresh_settle: 40s
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    - priority: 600
+      then:
+        - output.turn_on: battery_enable
+    - priority: -100   # after Wi-Fi/API are up
+      then:
+        - script.execute: refresh_and_sleep
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal     # E1002 needs octal; quad fails to load the image
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: UART0   # CH340K bridge — needed to see serial logs
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+  power_save_mode: none  # we deep-sleep instead; keep the short awake window quick
+  ap:
+    ssid: "${name} Fallback"
+
+captive_portal:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+http_request:
+  verify_ssl: false
+  timeout: 20s
+
+# --- Display ------------------------------------------------------------------
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO9
+
+display:
+  - platform: epaper_spi
+    id: epaper
+    model: Seeed-reTerminal-E1002
+    cs_pin: GPIO10
+    dc_pin: GPIO11
+    reset_pin: GPIO12
+    busy_pin:
+      number: GPIO13
+      inverted: true
+    update_interval: never   # we drive updates explicitly
+    lambda: |-
+      it.image(0, 0, id(dashboard));
+
+online_image:
+  - id: dashboard
+    url: ${dashboard_url}
+    format: PNG
+    type: RGB565
+    resize: 800x480
+    update_interval: never
+    on_download_finished:
+      then:
+        - logger.log: "Dashboard image downloaded, drawing"
+        - component.update: epaper
+        - delay: ${refresh_settle}
+        - logger.log: "Entering deep sleep"
+        - deep_sleep.enter: sleeper
+    on_error:
+      then:
+        - logger.log:
+            level: WARN
+            format: "Dashboard download failed — sleeping without update"
+        - deep_sleep.enter: sleeper
+
+script:
+  - id: refresh_and_sleep
+    mode: single
+    then:
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 30s
+      - delay: 2s   # let API connect so battery value reaches HA
+      - component.update: dashboard
+
+# --- Power --------------------------------------------------------------------
+deep_sleep:
+  id: sleeper
+  sleep_duration: ${sleep_minutes}min
+  run_duration: 150s          # safety cap if anything hangs
+  wakeup_pin:
+    number: GPIO4             # right white button: hold to wake for OTA
+    inverted: true
+  wakeup_pin_mode: INVERT_WAKEUP
+
+output:
+  - platform: gpio
+    pin: GPIO21
+    id: battery_enable
+
+sensor:
+  - platform: adc
+    pin: GPIO1
+    id: battery_voltage
+    name: "Battery Voltage"
+    attenuation: 12db
+    update_interval: 5s      # a couple of samples per wake window
+    filters:
+      - multiply: 2.0
+    unit_of_measurement: V
+    accuracy_decimals: 2
+    device_class: voltage
+  - platform: copy
+    source_id: battery_voltage
+    name: "Battery"
+    unit_of_measurement: "%"
+    device_class: battery
+    accuracy_decimals: 0
+    filters:
+      - calibrate_linear:
+          - 4.15 -> 100
+          - 3.96 -> 90
+          - 3.80 -> 60
+          - 3.58 -> 30
+          - 3.41 -> 10
+          - 3.27 -> 0
+      - clamp:
+          min_value: 0
+          max_value: 100
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 10s
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO3
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Green Button"
+    on_press:
+      - component.update: dashboard   # manual refresh while awake

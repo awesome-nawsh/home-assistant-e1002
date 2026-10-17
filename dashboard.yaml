@@ -1,0 +1,76 @@
+# Lovelace storage-mode dashboard "E1002 Hallway" — url_path: e1002-hallway, view path: hallway
+# Panel view, one button-card. Whole 800x480 layout is inline HTML/CSS in a single custom field
+# (button-card's own styles.grid did NOT lay out custom_fields on HA 2026.10 — see CLAUDE.md).
+# Rendered by the Puppet add-on at:
+#   http://homeassistant.local:10000/e1002-hallway/hallway?kiosk&viewport=800x480&format=png
+views:
+  - title: Hallway
+    path: hallway
+    type: panel
+    cards:
+      - type: custom:button-card
+        entity: sensor.singapore_house_power_minute_average
+        triggers_update:
+          - sensor.main_sensor_temperature
+          - sensor.main_sensor_humidity
+          - sensor.central_singapore_temperature
+          - sensor.central_singapore_humidity
+          - sensor.mains_house_monitor_singapore_house_energy_today_ha
+          - weather.singapore_weather_bishan
+          - person.sean_miller
+        show_name: false
+        show_icon: false
+        show_state: false
+        show_label: false
+        tap_action:
+          action: none
+        styles:
+          card:
+            - width: 800px
+            - height: 480px
+            - margin: 0
+            - padding: 0
+            - border-radius: 0
+            - box-shadow: none
+            - border: none
+            - background: "#FFFFFF"
+          grid:
+            - grid-template-areas: '"panel"'
+            - grid-template-columns: 800px
+            - grid-template-rows: 480px
+          custom_fields:
+            panel:
+              - grid-area: panel
+              - width: 800px
+              - height: 480px
+              - margin: 0
+              - padding: 0
+              - justify-self: start
+              - align-self: start
+        custom_fields:
+          panel: |
+            [[[
+              const F = "font-family:'Roboto Condensed','Arial Narrow',Roboto,Arial,sans-serif;font-weight:700;color:#000;";
+              const d = new Date();
+              const day = d.toLocaleDateString('en-GB',{weekday:'long'});
+              const dm = d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+              const now = d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+              const w = (states['weather.singapore_weather_bishan']?.state || '').replace(/[-_]/g,' ');
+              const ot = Math.round(parseFloat(states['sensor.central_singapore_temperature']?.state));
+              const oh = Math.round(parseFloat(states['sensor.central_singapore_humidity']?.state));
+              const it = parseFloat(states['sensor.main_sensor_temperature']?.state).toFixed(1);
+              const ih = Math.round(parseFloat(states['sensor.main_sensor_humidity']?.state));
+              const kw = (parseFloat(states['sensor.singapore_house_power_minute_average']?.state)/1000).toFixed(1);
+              const kwh = parseFloat(states['sensor.mains_house_monitor_singapore_house_energy_today_ha']?.state).toFixed(1);
+              const home = states['person.sean_miller']?.state === 'home';
+              return `
+            <div style="${F}width:800px;height:480px;background:#fff;display:grid;grid-template-columns:440px 360px;grid-template-rows:64px 186px 100px 96px 34px;grid-template-areas:'hdr hdr' 'clock inside' 'outside power' 'home power' 'foot foot';overflow:hidden;text-align:left;line-height:1;">
+              <div style="grid-area:hdr;background:#000;color:#fff;font-size:30px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;text-transform:uppercase;"><span>${day} ${dm}</span><span>${w}</span></div>
+              <div style="grid-area:clock;font-size:150px;letter-spacing:-4px;padding:24px 0 0 24px;border-right:2px solid #000;">${now}</div>
+              <div style="grid-area:outside;font-size:36px;padding:20px 0 0 24px;border-right:2px solid #000;display:flex;align-items:baseline;gap:16px;"><span>OUTSIDE</span><span style="color:#0000FF;font-size:44px;">${ot}°</span><span>${oh} %</span></div>
+              <div style="grid-area:home;font-size:30px;padding:16px 0 0 24px;border-top:2px solid #000;border-right:2px solid #000;display:flex;align-items:center;gap:14px;"><span style="display:inline-block;width:36px;height:36px;border-radius:50%;background:${home ? '#00AA00' : '#FF0000'};"></span><span>SEAN ${home ? 'HOME' : 'AWAY'}</span></div>
+              <div style="grid-area:inside;padding:26px 0 0 30px;border-bottom:2px solid #000;"><div style="font-size:26px;">INSIDE</div><div style="display:flex;align-items:baseline;gap:40px;margin-top:10px;"><span style="font-size:84px;">${it}°</span><span style="font-size:44px;">${ih} %</span></div></div>
+              <div style="grid-area:power;padding:22px 0 0 30px;"><div style="font-size:26px;">POWER NOW</div><div style="font-size:72px;color:#FF0000;margin-top:10px;">${kw} kW</div><div style="font-size:30px;margin-top:12px;">TODAY ${kwh} kWh</div></div>
+              <div style="grid-area:foot;border-top:2px solid #000;font-size:16px;font-weight:400;display:flex;justify-content:space-between;align-items:center;padding:0 24px;"><span>Updated ${now}</span><span>Hallway</span></div>
+            </div>`;
+            ]]]
