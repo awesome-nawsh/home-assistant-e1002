@@ -48,6 +48,13 @@ the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sl
   (PNG, RGB565, 800x480 from Puppet via `homeassistant.local`) rendered the colour panel
   first try. Pins in this file are therefore hardware-verified.
 
+- 2026-10-17 — Scheduler add-on 0.1.1 verified end-to-end with OTA firmware: image → draw →
+  report → sleep from `/api/sleep`. Puppet reachable from the add-on at `http://172.30.32.1:10000`
+  (set via the `puppet_url` option); the add-on hostname did not resolve. Host port mapped to 8198
+  (8098 clashed with OpenDisplay Wi-Fi add-on) — firmware `scheduler_url` must match. HA screens
+  need the `dashboard/view` path form. Puppet 404s on a cold render → add-on retries once.
+
 ## Open / unverified
 - 40 s `refresh_settle` before sleep is a guess for Spectra-6 full refresh; tune from logs.
-- Battery life at 10-min cycles not yet measured.
+- Battery life not yet measured; Energy screen currently at 5-min interval for testing.
+- Web-URL screens (headless Chromium path) not yet exercised on real hardware.

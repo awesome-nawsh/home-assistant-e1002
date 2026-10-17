@@ -15,6 +15,9 @@ based on screens and schedules you configure in the add-on's web UI.
 - `POST /api/report?device=<id>` → JSON `{battery_pct, battery_v, rssi}`; shown in the UI
 
 ## Schedules
-Each screen has one or more windows (days + start/end, same day, no midnight crossing).
-Saving is refused if windows of two enabled screens overlap, so at most one screen is active at any time.
-When no screen is active the device sleeps until the next window opens (max 6 h).
+Each screen has one or more windows (days + start/end within one day). Screens whose windows
+overlap rotate in list order; each stays up for its dwell (2–10 min, per screen or the default).
+A window starting or ending cuts the current dwell short so the schedule is honoured.
+When no screen is active the panel is blanked (or shows the fallback screen) and the device sleeps
+until the next window (6 h hops). The night schedule (may cross midnight) blanks the panel once and
+sleeps the device through to its end.

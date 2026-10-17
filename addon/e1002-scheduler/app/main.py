@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from render import placeholder, render_screen
+from render import blank, placeholder, render_screen
 from schedule import Store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -51,18 +51,24 @@ async def index():
 
 
 @app.get("/api/config")
-async def get_config():
-    active, end = store.active_screen()
-    secs, why = store.sleep_seconds()
+async def get_config(device: str = Query("e1002")):
+    active = store.active_screens()
+    secs, why = store.sleep_seconds(device)
+    nxt, how = store.pick_next(device)
+    boundary = store.next_boundary()
     return {
-        "default_interval_min": store.data["default_interval_min"],
+        "default_dwell_min": store.data["default_dwell_min"],
         "fallback_screen": store.data.get("fallback_screen"),
+        "night": store.data.get("night"),
         "screens": store.data["screens"],
         "devices": store.data["devices"],
         "status": {
             "now": store.now().isoformat(timespec="seconds"),
-            "active_screen": active["id"] if active else None,
-            "active_until": end.isoformat(timespec="minutes") if end else None,
+            "night": store.in_night(store.now()),
+            "active_screens": [s["id"] for s in active],
+            "next_screen": nxt["id"] if nxt else None,
+            "next_how": how,
+            "next_boundary": boundary.isoformat(timespec="minutes") if boundary else None,
             "next_sleep_s": secs,
             "reason": why,
         },
@@ -94,7 +100,7 @@ async def reorder(ids: list[str] = Body(...)):
 @app.post("/api/globals")
 async def set_globals(body: dict = Body(...)):
     try:
-        store.set_globals(body.get("default_interval_min"), body.get("fallback_screen", None))
+        store.set_globals(body)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}
@@ -116,27 +122,30 @@ async def preview(sid: str, force: bool = False):
 # ---------------- Device API ----------------
 @app.get("/api/image")
 async def device_image(device: str = Query("e1002")):
-    screen, _ = store.active_screen()
-    source = "scheduled"
+    screen, how = store.pick_next(device)
     if screen is None:
-        screen = store.fallback()
-        source = "fallback"
-    if screen is None:
+        # night or idle with no fallback: blank the panel once, then tell the device
+        # there is nothing new (204) so it skips the e-paper refresh on later wakes
+        last = (store.data["devices"].get(device) or {}).get("last_screen", "unset")
+        if last is None:
+            log.info("device %s -> already blank (%s), 204", device, how)
+            return Response(status_code=204)
         store.mark_shown(device, None)
-        return Response(placeholder("Nothing scheduled", W, H), media_type="image/png")
+        log.info("device %s -> blank (%s)", device, how)
+        return Response(blank(W, H), media_type="image/png", headers={"Cache-Control": "no-store"})
     try:
         png = await _render(screen)
     except Exception as e:
         log.error("render %s failed: %s", screen["name"], e)
         png = placeholder(f"{screen['name']}: render failed", W, H)
     store.mark_shown(device, screen["id"])
-    log.info("device %s -> %s (%s)", device, screen["name"], source)
+    log.info("device %s -> %s (%s)", device, screen["name"], how)
     return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/sleep")
 async def device_sleep(device: str = Query("e1002")):
-    secs, why = store.sleep_seconds()
+    secs, why = store.sleep_seconds(device)
     log.info("device %s sleep %ss (%s)", device, secs, why)
     return Response(str(secs), media_type="text/plain")
 

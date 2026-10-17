@@ -95,3 +95,10 @@ def placeholder(text: str, w: int, h: int) -> bytes:
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
+
+
+def blank(w: int, h: int) -> bytes:
+    """All-white panel (night / nothing scheduled)."""
+    out = io.BytesIO()
+    Image.new("RGB", (w, h), "white").save(out, format="PNG")
+    return out.getvalue()

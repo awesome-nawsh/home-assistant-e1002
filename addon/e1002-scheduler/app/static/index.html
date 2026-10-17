@@ -57,19 +57,25 @@
       <h2 style="margin:0">Screens</h2>
       <button class="primary" onclick="openEditor()">+ Add screen</button>
     </div>
-    <p class="hint">Schedules may not overlap — at most one screen is active at any moment. Outside all windows the device sleeps until the next one (max 6 h).</p>
+    <p class="hint">Screens whose windows overlap rotate in list order, each staying up for its dwell time (2–10 min). Outside all windows the panel is blanked (or shows the fallback) and the device sleeps until the next window (6 h hops).</p>
     <table>
-      <thead><tr><th></th><th>Name</th><th>Source</th><th>Schedule</th><th>Interval</th><th>State</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Name</th><th>Source</th><th>Schedule</th><th>Dwell</th><th>State</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
 
   <div class="card">
-    <h2>Defaults</h2>
+    <h2>Defaults &amp; night</h2>
     <div class="row">
-      <div><label>Default interval (min)</label><input type="number" id="gInterval" min="1" max="1440" style="width:110px"></div>
-      <div class="grow"><label>Fallback screen (shown when nothing is scheduled)</label><select id="gFallback"></select></div>
-      <div style="align-self:flex-end"><button onclick="saveGlobals()">Save</button></div>
+      <div><label>Default dwell (min, 2–10)</label><input type="number" id="gDwell" min="2" max="10" style="width:110px"></div>
+      <div class="grow"><label>When nothing is scheduled</label><select id="gFallback"></select></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Night schedule</label><label style="display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)"><input type="checkbox" id="gNightOn"> Enabled</label></div>
+      <div><label>Night starts</label><input type="time" id="gNightStart"></div>
+      <div><label>Night ends</label><input type="time" id="gNightEnd"></div>
+      <div class="hint grow">Panel is cleared at night start and the device sleeps through (may cross midnight).</div>
+      <div style="align-self:flex-end"><button class="primary" onclick="saveGlobals()">Save</button></div>
     </div>
     <div class="err" id="gErr"></div>
   </div>
@@ -93,7 +99,7 @@
       <div class="hint" id="fTargetHint">Rendered via the Puppet add-on with kiosk mode and the panel's viewport.</div>
     </div>
     <div class="row" style="margin-top:8px">
-      <div><label>Interval (min, blank = default)</label><input type="number" id="fInterval" min="1" max="1440" style="width:140px"></div>
+      <div><label>Dwell (min, 2–10, blank = default)</label><input type="number" id="fDwell" min="2" max="10" style="width:160px"></div>
       <div><label>Enabled</label><input type="checkbox" id="fEnabled" checked></div>
     </div>
     <div style="margin-top:12px"><label>Schedule windows</label><div id="fWindows"></div>
@@ -130,15 +136,16 @@ function renderRows() {
   const tb = document.getElementById('rows'); tb.innerHTML = '';
   cfg.screens.forEach((s, i) => {
     const tr = document.createElement('tr');
-    const isActive = cfg.status.active_screen === s.id;
+    const isActive = cfg.status.active_screens.includes(s.id);
+    const isNext = cfg.status.next_screen === s.id;
     if (isActive) tr.className = 'active';
     tr.innerHTML = `
       <td><img class="thumb" src="api/preview/${s.id}?t=${Date.now()}" title="click to re-render" onclick="this.src='api/preview/${s.id}?force=1&t='+Date.now()"></td>
       <td><b>${esc(s.name)}</b>${cfg.fallback_screen===s.id?' <span class="pill">fallback</span>':''}</td>
       <td class="muted">${s.type==='ha'?'HA':'URL'} · ${esc(s.target)}</td>
       <td>${fmtWindows(s)}</td>
-      <td>${s.interval_min ?? `<span class="muted">${cfg.default_interval_min}</span>`} min</td>
-      <td>${isActive?'<span class="pill on">active now</span>':(s.enabled?'<span class="pill">idle</span>':'<span class="pill off">disabled</span>')}</td>
+      <td>${s.dwell_min ?? `<span class="muted">${cfg.default_dwell_min}</span>`} min</td>
+      <td>${isActive?`<span class="pill on">${isNext?'up next':'in rotation'}</span>`:(s.enabled?'<span class="pill">idle</span>':'<span class="pill off">disabled</span>')}</td>
       <td style="white-space:nowrap">
         <button class="small" onclick="move(${i},-1)" ${i===0?'disabled':''}>↑</button>
         <button class="small" onclick="move(${i},1)" ${i===cfg.screens.length-1?'disabled':''}>↓</button>
@@ -159,13 +166,16 @@ function renderDevice() {
     <div class="stat"><span class="muted">Wi-Fi</span><b>${d.rssi!=null?d.rssi+' dBm':'—'}</b></div>
     <div class="stat"><span class="muted">Last seen</span><b>${d.last_seen?d.last_seen.slice(11,16):'—'}</b><span class="hint">${d.last_seen?d.last_seen.slice(0,10):''}</span></div>
     <div class="stat"><span class="muted">Last screen</span><b>${esc(last)}</b></div>
-    <div class="stat grow"><span class="muted">Right now</span><b>${esc(st.reason)}</b><span class="hint">next sleep would be ${Math.round(st.next_sleep_s/60)} min · server time ${st.now.slice(11,16)}</span></div>`;
+    <div class="stat grow"><span class="muted">Right now</span><b>${st.night?'Night — panel blank, device asleep':esc(st.reason)}</b><span class="hint">next change ${st.next_boundary?st.next_boundary.slice(11,16):'—'} · sleep after next wake ${Math.round(st.next_sleep_s/60)} min · server time ${st.now.slice(11,16)}</span></div>`;
 }
 
 function renderGlobals() {
-  document.getElementById('gInterval').value = cfg.default_interval_min;
+  document.getElementById('gDwell').value = cfg.default_dwell_min;
+  document.getElementById('gNightOn').checked = !!cfg.night?.enabled;
+  document.getElementById('gNightStart').value = cfg.night?.start || '23:00';
+  document.getElementById('gNightEnd').value = cfg.night?.end || '06:30';
   const sel = document.getElementById('gFallback');
-  sel.innerHTML = '<option value="">— none (blank panel) —</option>' +
+  sel.innerHTML = '<option value="">Blank panel</option>' +
     cfg.screens.map(s=>`<option value="${s.id}" ${cfg.fallback_screen===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 }
 
@@ -173,8 +183,11 @@ async function saveGlobals() {
   const e = document.getElementById('gErr'); e.textContent = '';
   try {
     await api('api/globals', {method:'POST', body: JSON.stringify({
-      default_interval_min: +document.getElementById('gInterval').value,
-      fallback_screen: document.getElementById('gFallback').value })});
+      default_dwell_min: +document.getElementById('gDwell').value,
+      fallback_screen: document.getElementById('gFallback').value,
+      night: { enabled: document.getElementById('gNightOn').checked,
+               start: document.getElementById('gNightStart').value,
+               end: document.getElementById('gNightEnd').value } })});
     await load();
   } catch (err) { e.textContent = err.message; }
 }
@@ -199,7 +212,7 @@ function openEditor(id) {
   document.getElementById('fName').value = s.name || '';
   document.getElementById('fType').value = s.type;
   document.getElementById('fTarget').value = s.target || '';
-  document.getElementById('fInterval').value = s.interval_min ?? '';
+  document.getElementById('fDwell').value = s.dwell_min ?? '';
   document.getElementById('fEnabled').checked = s.enabled !== false;
   document.getElementById('fErr').textContent = '';
   const w = document.getElementById('fWindows'); w.innerHTML = '';
@@ -239,7 +252,7 @@ async function saveScreen() {
     name: document.getElementById('fName').value,
     type: document.getElementById('fType').value,
     target: document.getElementById('fTarget').value,
-    interval_min: document.getElementById('fInterval').value ? +document.getElementById('fInterval').value : null,
+    dwell_min: document.getElementById('fDwell').value ? +document.getElementById('fDwell').value : null,
     enabled: document.getElementById('fEnabled').checked,
     windows,
   };
