@@ -49,6 +49,7 @@
   <div class="card">
     <h2>Device</h2>
     <div class="row" id="device"></div>
+    <p class="hint" id="devUrl"></p>
     <p class="hint">The display wakes on its own schedule — there is no way to wake a deep-sleeping device over Wi-Fi. For an immediate refresh press the green button on the unit.</p>
   </div>
 
@@ -174,6 +175,7 @@ function renderRows() {
 
 function renderDevice() {
   const d = cfg.devices?.e1002 || {};
+  document.getElementById('devUrl').innerHTML = `Device API: <code>${esc(cfg.device_url.url)}</code> — set this as the <b>Scheduler URL</b> on the device in Home Assistant (Settings → Devices → E1002 Hallway) if the add-on port changes.`;
   const st = cfg.status;
   const last = d.last_screen ? (cfg.screens.find(s=>s.id===d.last_screen)?.name || '?') : '—';
   const nextWake = d.last_seen ? '' : '';

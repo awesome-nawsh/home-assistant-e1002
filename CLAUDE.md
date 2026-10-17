@@ -7,6 +7,8 @@ the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sl
 ## Files
 - `e1002-hallway.yaml` — ESPHome config. Fetches `/api/image`, posts `/api/report`, reads `/api/sleep`
   from the add-on, then deep-sleeps for the returned seconds (fallback 10 min if unreachable).
+  The base URL is the **Scheduler URL** text entity on the device (persisted in flash, editable in HA);
+  the substitution is only its initial value. The add-on UI shows the correct URL (host port via Supervisor).
 - `dashboard.yaml` — Lovelace view (storage-mode dashboard `e1002-hallway`, view `hallway`)
 - `addon/e1002-scheduler/` — HA add-on: screens (HA path via Puppet, or URL via headless Chromium),
   non-overlapping schedules, per-screen interval, 6-colour Floyd–Steinberg dithering, device API on

@@ -1,3 +1,6 @@
+## 0.2.3
+- UI shows the exact device API URL (host port read from the Supervisor).
+
 ## 0.2.2
 - `nav=next|prev|refresh` on /api/image: right/left buttons step the rotation, green re-shows the current screen.
 

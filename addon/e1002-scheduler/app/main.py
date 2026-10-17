@@ -37,6 +37,24 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 _cache: dict[str, tuple[float, bytes]] = {}  # screen id -> (ts, png)
 CACHE_TTL = 120
+_device_url: dict[str, Any] = {"port": None, "checked": 0.0}
+
+
+async def device_base_url() -> dict:
+    """Host port the Supervisor mapped for 8098/tcp, so the UI can show the exact device URL."""
+    import httpx
+    tok = os.environ.get("SUPERVISOR_TOKEN")
+    if tok and time.time() - _device_url["checked"] > 300:
+        _device_url["checked"] = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=5) as c:
+                r = await c.get("http://supervisor/addons/self/info", headers={"Authorization": f"Bearer {tok}"})
+                net = (r.json().get("data") or {}).get("network") or {}
+                _device_url["port"] = net.get("8098/tcp")
+        except Exception as e:  # not fatal — UI just can't show the port
+            log.warning("supervisor port lookup failed: %s", e)
+    port = _device_url["port"] or 8098
+    return {"port": port, "url": f"http://homeassistant.local:{port}"}
 
 
 async def _render(screen: dict, force: bool = False) -> bytes:
@@ -77,6 +95,7 @@ async def get_config(device: str = Query("e1002")):
             "reason": why,
         },
         "panel": {"width": W, "height": H},
+        "device_url": await device_base_url(),
         "battery": store.battery_estimate(float(opts["battery_mah"]), float(opts["awake_mah_per_wake"]),
                                           float(opts["draw_mah"]), float(opts["sleep_ma"])),
     }

@@ -8,8 +8,9 @@ substitutions:
   name: e1002-hallway
   friendly_name: "E1002 Hallway"
   device_id: e1002
-  # E1002 Scheduler add-on (port 8098). Use HA's LAN IP if mDNS is unreliable from the ESP.
-  scheduler_url: "http://homeassistant.local:8098"
+  # Default only — the live value is the "Scheduler URL" text entity on the device in HA
+  # (persisted in flash, editable without reflashing). Use the add-on's mapped host port.
+  scheduler_url: "http://homeassistant.local:8198"
   fallback_sleep: "10"      # minutes, used only if the scheduler can't be reached
   refresh_settle: 40s       # Spectra-6 full refresh time before sleeping
 
@@ -67,6 +68,18 @@ http_request:
   id: http
   verify_ssl: false
   timeout: 20s
+
+text:
+  - platform: template
+    id: scheduler_url
+    name: "Scheduler URL"
+    icon: mdi:link-variant
+    entity_category: config
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: "${scheduler_url}"
+    max_length: 120
 
 globals:
   - id: sleep_seconds
@@ -133,7 +146,7 @@ script:
       - online_image.set_url:
           id: dashboard
           url: !lambda |-
-            std::string u = "${scheduler_url}/api/image?device=${device_id}";
+            std::string u = id(scheduler_url).state + "/api/image?device=${device_id}";
             if (!id(nav).empty()) u += "&nav=" + id(nav);
             return u;
       - component.update: dashboard
@@ -143,7 +156,7 @@ script:
     then:
       # 1. report battery / signal to the scheduler (best effort)
       - http_request.post:
-          url: "${scheduler_url}/api/report?device=${device_id}"
+          url: !lambda return id(scheduler_url).state + "/api/report?device=${device_id}";
           request_headers:
             Content-Type: application/json
           body: !lambda |-
@@ -157,7 +170,7 @@ script:
                 format: "Battery report failed"
       # 2. ask how long to sleep
       - http_request.get:
-          url: "${scheduler_url}/api/sleep?device=${device_id}"
+          url: !lambda return id(scheduler_url).state + "/api/sleep?device=${device_id}";
           capture_response: true
           on_response:
             then:

@@ -1,5 +1,5 @@
 name: E1002 Scheduler
-version: 0.2.2
+version: 0.2.3
 slug: e1002_scheduler
 description: Screens, schedules and sleep control for a battery e-paper display
 url: https://github.com/awesome-nawsh/home-assistant-e1002
@@ -7,6 +7,7 @@ arch:
   - aarch64
   - amd64
 init: false
+hassio_api: true
 ingress: true
 ingress_port: 8098
 panel_icon: mdi:monitor-dashboard
