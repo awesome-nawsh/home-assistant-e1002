@@ -32,7 +32,11 @@ the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sl
 - 2026-10-12 — `utility_meter` daily on `…energy_cumulative` →
   `sensor.mains_house_monitor_singapore_house_energy_today_ha` (the old today sensor never reset).
 
+- 2026-10-17 — First USB flash of `e1002-hallway.yaml` on ESPHome 2026.9.1 built clean with
+  `esp-idf` + `psram: octal`; `epaper_spi` model `Seeed-reTerminal-E1002` + `online_image`
+  (PNG, RGB565, 800x480 from Puppet via `homeassistant.local`) rendered the colour panel
+  first try. Pins in this file are therefore hardware-verified.
+
 ## Open / unverified
-- `esp-idf` chosen over Seeed's `arduino` examples — switch if `epaper_spi`/`online_image` fails to build.
-- mDNS from the ESP: use HA's LAN IP in `dashboard_url` if download fails with DNS error.
 - 40 s `refresh_settle` before sleep is a guess for Spectra-6 full refresh; tune from logs.
+- Battery life at 10-min cycles not yet measured.
