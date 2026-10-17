@@ -233,23 +233,29 @@ class Store:
                 return best
         return None
 
+    def _last(self, device: str) -> str | None:
+        return (self.data["devices"].get(device) or {}).get("last_screen")
+
     def pick_next(self, device: str, at: datetime | None = None) -> tuple[dict | None, str]:
         """Choose what the device should show now. Returns (screen or None, reason)."""
-        at = at or self.now()
+        return self._pick(at or self.now(), self._last(device))
+
+    def _pick(self, at: datetime, last: str | None) -> tuple[dict | None, str]:
         if self.in_night(at):
             return None, "night"
         active = self.active_screens(at)
         if not active:
             fb = self.fallback()
             return fb, "fallback" if fb else "idle"
-        last = (self.data["devices"].get(device) or {}).get("last_screen")
         ids = [s["id"] for s in active]
         idx = (ids.index(last) + 1) % len(active) if last in ids else 0
         return active[idx], f"rotation {idx + 1}/{len(active)}"
 
     def sleep_seconds(self, device: str, at: datetime | None = None) -> tuple[int, str]:
         """Seconds to sleep after the device has just drawn, and a reason string."""
-        at = at or self.now()
+        return self._sleep(at or self.now(), self._last(device))
+
+    def _sleep(self, at: datetime, last: str | None) -> tuple[int, str]:
         boundary = self.next_boundary(at)
         to_boundary = int((boundary - at).total_seconds()) + 5 if boundary else MAX_SLEEP_S
         if self.in_night(at):
@@ -257,7 +263,6 @@ class Store:
             return _clamp(int((end - at).total_seconds()) + 5), f"night until {end:%a %H:%M}"
         active = self.active_screens(at)
         if active:
-            last = (self.data["devices"].get(device) or {}).get("last_screen")
             shown = next((s for s in active if s["id"] == last), active[0])
             dwell = self.dwell_s(shown)
             secs = min(dwell, to_boundary)
@@ -266,6 +271,30 @@ class Store:
         if boundary is None:
             return MAX_SLEEP_S, "no schedules — long sleep"
         return _clamp(to_boundary), f"idle until {boundary:%a %H:%M}"
+
+    # ---------- battery estimate ----------
+    def simulate_week(self, start: datetime | None = None) -> dict:
+        """Walk one week of wakes exactly as the device would. Returns counts per day."""
+        at = (start or self.now()).replace(second=0, microsecond=0)
+        end = at + timedelta(days=7)
+        last: str | None = "unset"
+        wakes = draws = 0
+        while at < end:
+            screen, _ = self._pick(at, last)
+            new = screen["id"] if screen else None
+            if new is not None or last is not None:   # a blank-on-blank wake skips the e-paper refresh
+                draws += 1
+            last = new
+            wakes += 1
+            secs, _ = self._sleep(at, last)
+            at += timedelta(seconds=secs + 60)         # ~60 s awake per cycle
+        return {"wakes_per_day": round(wakes / 7, 1), "draws_per_day": round(draws / 7, 1)}
+
+    def battery_estimate(self, capacity_mah: float, awake_mah_per_wake: float, draw_mah: float, sleep_ma: float) -> dict:
+        sim = self.simulate_week()
+        per_day = sim["wakes_per_day"] * awake_mah_per_wake + sim["draws_per_day"] * draw_mah + sleep_ma * 24
+        days = capacity_mah * 0.85 / per_day if per_day > 0 else None   # 85%: usable capacity + cutoff margin
+        return {**sim, "mah_per_day": round(per_day, 1), "days": round(days, 1) if days else None}
 
     def fallback(self) -> dict | None:
         fid = self.data.get("fallback_screen")

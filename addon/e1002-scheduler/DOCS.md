@@ -8,6 +8,8 @@ based on screens and schedules you configure in the add-on's web UI.
   add-on hostname. If HA-dashboard screens fail to render, try `http://172.30.32.1:10000`.
 - `timezone` — schedules are interpreted in this zone.
 - `width`/`height` — panel size.
+- `battery_mah`, `awake_mah_per_wake`, `draw_mah`, `sleep_ma` — battery model used for the estimate
+  shown in the UI. Defaults are rough; adjust once real voltage readings give you a drain rate.
 
 ## Device API (host port as mapped in the add-on; default 8098)
 - `GET /api/image?device=<id>` → PNG of the currently scheduled screen (or the fallback screen)

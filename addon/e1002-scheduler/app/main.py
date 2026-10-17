@@ -21,7 +21,11 @@ OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
 DATA_PATH = os.environ.get("DATA_PATH", "/data/screens.json")
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 
-opts: dict[str, Any] = {"puppet_url": "http://0f1cc410-puppet:10000", "timezone": "Asia/Singapore", "width": 800, "height": 480}
+opts: dict[str, Any] = {
+    "puppet_url": "http://0f1cc410-puppet:10000", "timezone": "Asia/Singapore", "width": 800, "height": 480,
+    # battery model — rough defaults for the E1002's 2000 mAh pack; calibrate from real readings
+    "battery_mah": 2000, "awake_mah_per_wake": 1.5, "draw_mah": 1.0, "sleep_ma": 0.12,
+}
 if os.path.exists(OPTIONS_PATH):
     with open(OPTIONS_PATH) as f:
         opts.update(json.load(f))
@@ -73,6 +77,8 @@ async def get_config(device: str = Query("e1002")):
             "reason": why,
         },
         "panel": {"width": W, "height": H},
+        "battery": store.battery_estimate(float(opts["battery_mah"]), float(opts["awake_mah_per_wake"]),
+                                          float(opts["draw_mah"]), float(opts["sleep_ma"])),
     }
 
 

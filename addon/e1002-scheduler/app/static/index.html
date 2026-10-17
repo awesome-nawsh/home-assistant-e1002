@@ -112,7 +112,23 @@
   </form>
 </dialog>
 
+<dialog id="pv" style="width:min(860px,96vw)">
+  <div class="row" style="justify-content:space-between;margin-bottom:10px">
+    <h2 id="pvTitle" style="margin:0">Preview</h2>
+    <div class="row">
+      <button class="small" onclick="pvReload(true)">Re-render</button>
+      <button class="small" onclick="pv.close()">Close</button>
+    </div>
+  </div>
+  <img id="pvImg" style="width:100%;aspect-ratio:800/480;border:1px solid var(--line);background:#fff;image-rendering:pixelated" alt="">
+  <p class="hint">Exactly what the panel receives: 800×480, dithered to the six e-paper colours.</p>
+</dialog>
+
 <script>
+const pv = document.getElementById('pv');
+let pvId = null;
+function openPreview(id, name) { pvId = id; document.getElementById('pvTitle').textContent = name; pvReload(false); pv.showModal(); }
+function pvReload(force) { document.getElementById('pvImg').src = `api/preview/${pvId}?${force?'force=1&':''}t=${Date.now()}`; }
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 let cfg = null;
 
@@ -140,7 +156,7 @@ function renderRows() {
     const isNext = cfg.status.next_screen === s.id;
     if (isActive) tr.className = 'active';
     tr.innerHTML = `
-      <td><img class="thumb" src="api/preview/${s.id}?t=${Date.now()}" title="click to re-render" onclick="this.src='api/preview/${s.id}?force=1&t='+Date.now()"></td>
+      <td><img class="thumb" src="api/preview/${s.id}?t=${Date.now()}" title="click to preview" onclick="openPreview('${s.id}','${esc(s.name)}')"></td>
       <td><b>${esc(s.name)}</b>${cfg.fallback_screen===s.id?' <span class="pill">fallback</span>':''}</td>
       <td class="muted">${s.type==='ha'?'HA':'URL'} · ${esc(s.target)}</td>
       <td>${fmtWindows(s)}</td>
@@ -166,6 +182,7 @@ function renderDevice() {
     <div class="stat"><span class="muted">Wi-Fi</span><b>${d.rssi!=null?d.rssi+' dBm':'—'}</b></div>
     <div class="stat"><span class="muted">Last seen</span><b>${d.last_seen?d.last_seen.slice(11,16):'—'}</b><span class="hint">${d.last_seen?d.last_seen.slice(0,10):''}</span></div>
     <div class="stat"><span class="muted">Last screen</span><b>${esc(last)}</b></div>
+    <div class="stat"><span class="muted">Est. battery life</span><b>${cfg.battery.days!=null?'~'+cfg.battery.days+' days':'—'}</b><span class="hint">${cfg.battery.wakes_per_day} wakes/day · ${cfg.battery.mah_per_day} mAh/day · rough model</span></div>
     <div class="stat grow"><span class="muted">Right now</span><b>${st.night?'Night — panel blank, device asleep':esc(st.reason)}</b><span class="hint">next change ${st.next_boundary?st.next_boundary.slice(11,16):'—'} · sleep after next wake ${Math.round(st.next_sleep_s/60)} min · server time ${st.now.slice(11,16)}</span></div>`;
 }
 
