@@ -127,8 +127,8 @@ async def preview(sid: str, force: bool = False):
 
 # ---------------- Device API ----------------
 @app.get("/api/image")
-async def device_image(device: str = Query("e1002")):
-    screen, how = store.pick_next(device)
+async def device_image(device: str = Query("e1002"), nav: str = Query("")):
+    screen, how = store.pick_next(device, nav=nav if nav in ("next", "prev", "refresh") else "")
     if screen is None:
         # night or idle with no fallback: blank the panel once, then tell the device
         # there is nothing new (204) so it skips the e-paper refresh on later wakes

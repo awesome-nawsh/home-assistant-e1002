@@ -236,11 +236,11 @@ class Store:
     def _last(self, device: str) -> str | None:
         return (self.data["devices"].get(device) or {}).get("last_screen")
 
-    def pick_next(self, device: str, at: datetime | None = None) -> tuple[dict | None, str]:
-        """Choose what the device should show now. Returns (screen or None, reason)."""
-        return self._pick(at or self.now(), self._last(device))
+    def pick_next(self, device: str, at: datetime | None = None, nav: str = "") -> tuple[dict | None, str]:
+        """Choose what the device should show now. nav: "" (rotate forward), "next", "prev", "refresh"."""
+        return self._pick(at or self.now(), self._last(device), nav)
 
-    def _pick(self, at: datetime, last: str | None) -> tuple[dict | None, str]:
+    def _pick(self, at: datetime, last: str | None, nav: str = "") -> tuple[dict | None, str]:
         if self.in_night(at):
             return None, "night"
         active = self.active_screens(at)
@@ -248,8 +248,11 @@ class Store:
             fb = self.fallback()
             return fb, "fallback" if fb else "idle"
         ids = [s["id"] for s in active]
-        idx = (ids.index(last) + 1) % len(active) if last in ids else 0
-        return active[idx], f"rotation {idx + 1}/{len(active)}"
+        if nav == "refresh" and last in ids:           # green button: same screen again
+            return active[ids.index(last)], f"refresh {ids.index(last) + 1}/{len(active)}"
+        step = -1 if nav == "prev" else 1
+        idx = (ids.index(last) + step) % len(active) if last in ids else (len(active) - 1 if nav == "prev" else 0)
+        return active[idx], f"{nav or 'rotation'} {idx + 1}/{len(active)}"
 
     def sleep_seconds(self, device: str, at: datetime | None = None) -> tuple[int, str]:
         """Seconds to sleep after the device has just drawn, and a reason string."""

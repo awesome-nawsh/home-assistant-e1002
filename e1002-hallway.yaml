@@ -9,7 +9,7 @@ substitutions:
   friendly_name: "E1002 Hallway"
   device_id: e1002
   # E1002 Scheduler add-on (port 8098). Use HA's LAN IP if mDNS is unreliable from the ESP.
-  scheduler_url: "http://homeassistant.local:8198"
+  scheduler_url: "http://homeassistant.local:8098"
   fallback_sleep: "10"      # minutes, used only if the scheduler can't be reached
   refresh_settle: 40s       # Spectra-6 full refresh time before sleeping
 
@@ -20,6 +20,14 @@ esphome:
     - priority: 600
       then:
         - output.turn_on: battery_enable
+        - lambda: |-
+            // Which button woke us? (ext1 bitmask; 0 = timer / power-on)
+            uint64_t mask = esp_sleep_get_ext1_wakeup_status();
+            if (mask & (1ULL << 4))      id(nav) = "next";     // right white
+            else if (mask & (1ULL << 5)) id(nav) = "prev";     // left white
+            else if (mask & (1ULL << 3)) id(nav) = "refresh";  // green: same screen again
+            else                         id(nav) = "";         // timer: rotate
+            ESP_LOGI("wake", "wakeup mask=0x%llx nav='%s'", mask, id(nav).c_str());
     - priority: -100   # after Wi-Fi/API are up
       then:
         - script.execute: wake_cycle
@@ -64,6 +72,9 @@ globals:
   - id: sleep_seconds
     type: int
     initial_value: "${fallback_sleep} * 60"
+  - id: nav
+    type: std::string
+    initial_value: '""'
 
 # --- Display ------------------------------------------------------------------
 spi:
@@ -114,6 +125,17 @@ script:
             wifi.connected:
           timeout: 30s
       - delay: 2s
+      - script.execute: fetch
+
+  - id: fetch
+    mode: restart
+    then:
+      - online_image.set_url:
+          id: dashboard
+          url: !lambda |-
+            std::string u = "${scheduler_url}/api/image?device=${device_id}";
+            if (!id(nav).empty()) u += "&nav=" + id(nav);
+            return u;
       - component.update: dashboard
 
   - id: finish_and_sleep
@@ -163,10 +185,12 @@ script:
 deep_sleep:
   id: sleeper
   run_duration: 180s          # safety cap if anything hangs
-  wakeup_pin:
-    number: GPIO4             # right white button: hold to wake for OTA
-    inverted: true
-  wakeup_pin_mode: INVERT_WAKEUP
+  esp32_ext1_wakeup:          # any button wakes the device; on_boot reads which one
+    pins:
+      - {number: GPIO3, allow_other_uses: true}   # green       → refresh current screen
+      - {number: GPIO4, allow_other_uses: true}   # right white → next screen
+      - {number: GPIO5, allow_other_uses: true}   # left white  → previous screen
+    mode: ANY_LOW
 
 output:
   - platform: gpio
@@ -208,12 +232,23 @@ sensor:
     name: "WiFi Signal"
     update_interval: 10s
 
+# Buttons while awake (when asleep the same buttons wake the device via ext1 above)
 binary_sensor:
   - platform: gpio
-    pin:
-      number: GPIO3
-      mode: INPUT_PULLUP
-      inverted: true
+    pin: {number: GPIO3, mode: INPUT_PULLUP, inverted: true, allow_other_uses: true}
     name: "Green Button"
     on_press:
-      - component.update: dashboard   # manual refresh while awake
+      - lambda: id(nav) = "refresh";
+      - script.execute: fetch
+  - platform: gpio
+    pin: {number: GPIO4, mode: INPUT_PULLUP, inverted: true, allow_other_uses: true}
+    name: "Right Button"
+    on_press:
+      - lambda: id(nav) = "next";
+      - script.execute: fetch
+  - platform: gpio
+    pin: {number: GPIO5, mode: INPUT_PULLUP, inverted: true, allow_other_uses: true}
+    name: "Left Button"
+    on_press:
+      - lambda: id(nav) = "prev";
+      - script.execute: fetch

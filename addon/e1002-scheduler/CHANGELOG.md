@@ -1,3 +1,6 @@
+## 0.2.2
+- `nav=next|prev|refresh` on /api/image: right/left buttons step the rotation, green re-shows the current screen.
+
 ## 0.2.1
 - Dwell range widened to 2–60 min.
 
