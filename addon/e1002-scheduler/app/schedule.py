@@ -14,7 +14,7 @@ Data model (screens.json):
 }
 Days: 0 = Monday … 6 = Sunday.
 Rotation: screens whose window covers "now" (and are enabled) are shown round-robin in list
-order; each stays up for its dwell (2–10 min). Window boundaries cut a dwell short.
+order; each stays up for its dwell (2–60 min). Window boundaries cut a dwell short.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 
 MAX_SLEEP_S = 6 * 3600
 MIN_SLEEP_S = 60
-DWELL_MIN, DWELL_MAX = 2, 10
+DWELL_MIN, DWELL_MAX = 2, 60
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
