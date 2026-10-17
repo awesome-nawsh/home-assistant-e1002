@@ -41,7 +41,12 @@ async def render_ha(puppet_url: str, path: str, w: int, h: int, timeout: float =
     url = f"{puppet_url.rstrip('/')}/{path}{sep}viewport={w}x{h}&format=png&wait=1500"
     log.info("puppet GET %s", url)
     async with httpx.AsyncClient(timeout=timeout) as c:
-        r = await c.get(url)
+        for attempt in (1, 2):  # Puppet can 404/5xx on a cold start; one retry covers it
+            r = await c.get(url)
+            if r.status_code == 200:
+                return r.content
+            log.warning("puppet %s on attempt %d", r.status_code, attempt)
+            await asyncio.sleep(3)
         r.raise_for_status()
         return r.content
 

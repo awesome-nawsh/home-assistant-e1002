@@ -11,4 +11,5 @@ RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
 COPY app /app
 WORKDIR /app
+ENV TZ=Asia/Singapore
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8098", "--proxy-headers"]

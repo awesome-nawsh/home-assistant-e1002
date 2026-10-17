@@ -9,7 +9,7 @@ based on screens and schedules you configure in the add-on's web UI.
 - `timezone` — schedules are interpreted in this zone.
 - `width`/`height` — panel size.
 
-## Device API (port 8098)
+## Device API (host port as mapped in the add-on; default 8098)
 - `GET /api/image?device=<id>` → PNG of the currently scheduled screen (or the fallback screen)
 - `GET /api/sleep?device=<id>` → integer seconds to sleep before the next wake
 - `POST /api/report?device=<id>` → JSON `{battery_pct, battery_v, rssi}`; shown in the UI

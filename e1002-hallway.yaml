@@ -9,7 +9,7 @@ substitutions:
   friendly_name: "E1002 Hallway"
   device_id: e1002
   # E1002 Scheduler add-on (port 8098). Use HA's LAN IP if mDNS is unreliable from the ESP.
-  scheduler_url: "http://homeassistant.local:8098"
+  scheduler_url: "http://homeassistant.local:8198"
   fallback_sleep: "10"      # minutes, used only if the scheduler can't be reached
   refresh_settle: 40s       # Spectra-6 full refresh time before sleeping
 
