@@ -34,11 +34,16 @@ def dither(png: bytes, w: int, h: int) -> bytes:
     return out.getvalue()
 
 
-async def render_ha(puppet_url: str, path: str, w: int, h: int, timeout: float = 45.0) -> bytes:
-    """HA dashboard path via the Puppet add-on. Puppet does the login; we do the dithering."""
+async def render_ha(puppet_url: str, path: str, w: int, h: int, wait_ms: int = 3000,
+                    next_s: int = 0, timeout: float = 60.0) -> bytes:
+    """HA dashboard path via the Puppet add-on. Puppet does the login; we do the dithering.
+    wait_ms: how long Puppet waits after load before the screenshot (lets cards hydrate).
+    next_s: hint so Puppet keeps its browser warm until the next expected request."""
     path = path.lstrip("/")
     sep = "&" if "?" in path else "?"
-    url = f"{puppet_url.rstrip('/')}/{path}{sep}viewport={w}x{h}&format=png&wait=1500"
+    url = f"{puppet_url.rstrip('/')}/{path}{sep}viewport={w}x{h}&format=png&wait={int(wait_ms)}"
+    if next_s:
+        url += f"&next={int(next_s)}"
     log.info("puppet GET %s", url)
     async with httpx.AsyncClient(timeout=timeout) as c:
         for attempt in (1, 2):  # Puppet can 404/5xx on a cold start; one retry covers it
@@ -51,14 +56,14 @@ async def render_ha(puppet_url: str, path: str, w: int, h: int, timeout: float =
         return r.content
 
 
-async def render_url(url: str, w: int, h: int, timeout: float = 60.0) -> bytes:
-    """Arbitrary web page via headless Chromium's --screenshot."""
+async def render_url(url: str, w: int, h: int, wait_ms: int = 3000, timeout: float = 60.0) -> bytes:
+    """Arbitrary web page via headless Chromium's --screenshot. wait_ms = virtual time budget."""
     with tempfile.TemporaryDirectory() as td:
         out = os.path.join(td, "shot.png")
         cmd = [
             CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
             "--hide-scrollbars", "--force-device-scale-factor=1", f"--window-size={w},{h}",
-            f"--user-data-dir={td}/profile", "--virtual-time-budget=8000", f"--screenshot={out}", url,
+            f"--user-data-dir={td}/profile", f"--virtual-time-budget={int(wait_ms) + 2000}", f"--screenshot={out}", url,
         ]
         log.info("chromium %s", url)
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
@@ -73,11 +78,13 @@ async def render_url(url: str, w: int, h: int, timeout: float = 60.0) -> bytes:
             return f.read()
 
 
-async def render_screen(screen: dict, puppet_url: str, w: int, h: int) -> bytes:
+async def render_screen(screen: dict, puppet_url: str, w: int, h: int, default_wait_ms: int = 3000,
+                        next_s: int = 0) -> bytes:
+    wait_ms = int(screen.get("wait_ms") or default_wait_ms)
     if screen["type"] == "ha":
-        raw = await render_ha(puppet_url, screen["target"], w, h)
+        raw = await render_ha(puppet_url, screen["target"], w, h, wait_ms, next_s)
     else:
-        raw = await render_url(screen["target"], w, h)
+        raw = await render_url(screen["target"], w, h, wait_ms)
     return dither(raw, w, h)
 
 
@@ -97,8 +104,25 @@ def placeholder(text: str, w: int, h: int) -> bytes:
     return out.getvalue()
 
 
-def blank(w: int, h: int) -> bytes:
-    """All-white panel (night / nothing scheduled)."""
+def sleep_card(title: str, subtitle: str, w: int, h: int) -> bytes:
+    """Low-ink panel shown while idle or at night: moon + title + next wake time."""
+    from PIL import ImageDraw, ImageFont
+
+    img = Image.new("RGB", (w, h), "white")
+    d = ImageDraw.Draw(img)
+
+    def font(size: int):
+        try:
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+        except Exception:
+            return ImageFont.load_default()
+
+    # crescent moon: black disc with a white disc cut out
+    cx, cy, r = w // 2, h // 2 - 70, 46
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill="black")
+    d.ellipse((cx - r + 26, cy - r - 14, cx + r + 26, cy + r - 14), fill="white")
+    d.text((w // 2, h // 2 + 30), title, fill="black", anchor="mm", font=font(40))
+    d.text((w // 2, h // 2 + 90), subtitle, fill="black", anchor="mm", font=font(26))
     out = io.BytesIO()
-    Image.new("RGB", (w, h), "white").save(out, format="PNG")
+    img.save(out, format="PNG")
     return out.getvalue()

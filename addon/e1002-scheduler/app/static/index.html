@@ -58,7 +58,7 @@
       <h2 style="margin:0">Screens</h2>
       <button class="primary" onclick="openEditor()">+ Add screen</button>
     </div>
-    <p class="hint">Screens whose windows overlap rotate in list order, each staying up for its dwell time (2–60 min). Outside all windows the panel is blanked (or shows the fallback) and the device sleeps until the next window (6 h hops).</p>
+    <p class="hint">Screens whose windows overlap rotate in list order, each staying up for its dwell time (2–60 min). Outside all windows the panel shows the sleep card (or the fallback screen) and the device sleeps until the next window (6 h hops).</p>
     <table>
       <thead><tr><th></th><th>Name</th><th>Source</th><th>Schedule</th><th>Dwell</th><th>State</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
@@ -75,7 +75,7 @@
       <div><label>Night schedule</label><label style="display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)"><input type="checkbox" id="gNightOn"> Enabled</label></div>
       <div><label>Night starts</label><input type="time" id="gNightStart"></div>
       <div><label>Night ends</label><input type="time" id="gNightEnd"></div>
-      <div class="hint grow">Panel is cleared at night start and the device sleeps through (may cross midnight).</div>
+      <div class="hint grow">Sleep card is shown at night start and the device sleeps through (may cross midnight).</div>
       <div style="align-self:flex-end"><button class="primary" onclick="saveGlobals()">Save</button></div>
     </div>
     <div class="err" id="gErr"></div>
@@ -101,6 +101,7 @@
     </div>
     <div class="row" style="margin-top:8px">
       <div><label>Dwell (min, 2–60, blank = default)</label><input type="number" id="fDwell" min="2" max="60" style="width:160px"></div>
+      <div><label>Render wait (ms, blank = default)</label><input type="number" id="fWait" min="500" max="30000" step="500" style="width:160px" placeholder="3000"></div>
       <div><label>Enabled</label><input type="checkbox" id="fEnabled" checked></div>
     </div>
     <div style="margin-top:12px"><label>Schedule windows</label><div id="fWindows"></div>
@@ -177,7 +178,7 @@ function renderDevice() {
   const d = cfg.devices?.e1002 || {};
   document.getElementById('devUrl').innerHTML = `Device API: <code>${esc(cfg.device_url.url)}</code> — set this as the <b>Scheduler URL</b> on the device in Home Assistant (Settings → Devices → E1002 Hallway) if the add-on port changes.`;
   const st = cfg.status;
-  const last = d.last_screen ? (cfg.screens.find(s=>s.id===d.last_screen)?.name || '?') : '—';
+  const last = !d.last_screen ? '—' : String(d.last_screen).startsWith('sleep:') ? 'Sleep card' : (cfg.screens.find(s=>s.id===d.last_screen)?.name || '?');
   const nextWake = d.last_seen ? '' : '';
   document.getElementById('device').innerHTML = `
     <div class="stat"><span class="muted">Battery</span><b>${d.battery_pct!=null?d.battery_pct+' %':'—'}</b><span class="hint">${d.battery_v!=null?d.battery_v+' V':''}</span></div>
@@ -194,7 +195,7 @@ function renderGlobals() {
   document.getElementById('gNightStart').value = cfg.night?.start || '23:00';
   document.getElementById('gNightEnd').value = cfg.night?.end || '06:30';
   const sel = document.getElementById('gFallback');
-  sel.innerHTML = '<option value="">Blank panel</option>' +
+  sel.innerHTML = '<option value="">Sleep card (moon + next wake time)</option>' +
     cfg.screens.map(s=>`<option value="${s.id}" ${cfg.fallback_screen===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 }
 
@@ -232,6 +233,8 @@ function openEditor(id) {
   document.getElementById('fType').value = s.type;
   document.getElementById('fTarget').value = s.target || '';
   document.getElementById('fDwell').value = s.dwell_min ?? '';
+  document.getElementById('fWait').value = s.wait_ms ?? '';
+  document.getElementById('fWait').placeholder = cfg.render_wait_ms;
   document.getElementById('fEnabled').checked = s.enabled !== false;
   document.getElementById('fErr').textContent = '';
   const w = document.getElementById('fWindows'); w.innerHTML = '';
@@ -244,7 +247,7 @@ function typeChanged() {
   document.getElementById('fTargetLabel').textContent = ha ? 'Dashboard path (e.g. e1002-hallway/hallway)' : 'Full URL';
   document.getElementById('fTarget').placeholder = ha ? 'e1002-hallway/hallway' : 'https://example.com/page';
   document.getElementById('fTargetHint').textContent = ha
-    ? 'Rendered via the Puppet add-on at the panel viewport. Add ?kiosk to hide the HA header.'
+    ? 'Rendered via the Puppet add-on at the panel viewport. Add ?kiosk to hide the HA header. If graphs or custom cards come out half-drawn, raise the render wait.'
     : 'Rendered with headless Chromium at the panel size, then dithered to 6 colours.';
 }
 
@@ -272,6 +275,7 @@ async function saveScreen() {
     type: document.getElementById('fType').value,
     target: document.getElementById('fTarget').value,
     dwell_min: document.getElementById('fDwell').value ? +document.getElementById('fDwell').value : null,
+    wait_ms: document.getElementById('fWait').value ? +document.getElementById('fWait').value : null,
     enabled: document.getElementById('fEnabled').checked,
     windows,
   };

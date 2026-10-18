@@ -88,6 +88,9 @@ class Store:
         d = s.get("dwell_min")
         if d is not None and (not isinstance(d, int) or d < DWELL_MIN or d > DWELL_MAX):
             errs.append(f"dwell must be {DWELL_MIN}–{DWELL_MAX} min or empty")
+        wm = s.get("wait_ms")
+        if wm is not None and (not isinstance(wm, int) or wm < 500 or wm > 30000):
+            errs.append("render wait must be 500–30000 ms or empty")
         for i, w in enumerate(s.get("windows", [])):
             days = w.get("days", [])
             if not days or any(d not in range(7) for d in days):
@@ -107,6 +110,7 @@ class Store:
             s.setdefault("enabled", True)
             s.setdefault("windows", [])
             s.setdefault("dwell_min", None)
+            s.setdefault("wait_ms", None)
             s["name"] = s["name"].strip()
             s["target"] = s["target"].strip()
             errs = self.validate_screen(s)
@@ -236,6 +240,24 @@ class Store:
     def _last(self, device: str) -> str | None:
         return (self.data["devices"].get(device) or {}).get("last_screen")
 
+    def next_window_start(self, at: datetime | None = None) -> datetime | None:
+        """Earliest future window start of an enabled screen (ignores night boundaries)."""
+        at = at or self.now()
+        best = None
+        for offset in range(8):
+            day_dt = at + timedelta(days=offset)
+            for s in self.data["screens"]:
+                if not s.get("enabled", True):
+                    continue
+                for w in s.get("windows", []):
+                    if day_dt.weekday() in w["days"]:
+                        t = _at(day_dt, _hm(w["start"]))
+                        if t > at and (best is None or t < best):
+                            best = t
+            if best is not None:
+                return best
+        return None
+
     def pick_next(self, device: str, at: datetime | None = None, nav: str = "") -> tuple[dict | None, str]:
         """Choose what the device should show now. nav: "" (rotate forward), "next", "prev", "refresh"."""
         return self._pick(at or self.now(), self._last(device), nav)
@@ -285,7 +307,7 @@ class Store:
         while at < end:
             screen, _ = self._pick(at, last)
             new = screen["id"] if screen else None
-            if new is not None or last is not None:   # a blank-on-blank wake skips the e-paper refresh
+            if new is not None or last is not None:   # a sleep-card-on-sleep-card wake skips the e-paper refresh
                 draws += 1
             last = new
             wakes += 1

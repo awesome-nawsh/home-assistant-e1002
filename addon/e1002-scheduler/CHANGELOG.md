@@ -1,3 +1,11 @@
+## 0.2.5
+- Per-screen render wait (ms) with a global default option `render_wait_ms` (3000); fixes half-drawn cards on cold renders.
+- Device fetches always render fresh and pass Puppet a `next=` hint so its browser stays warm.
+
+## 0.2.4
+- Sleep card (moon + "Nothing scheduled"/"Sleeping" + next screen time) replaces the blank panel; redrawn only when the text changes.
+- Firmware: 204 from the scheduler logged as "No new image", not a failure.
+
 ## 0.2.3
 - UI shows the exact device API URL (host port read from the Supervisor).
 

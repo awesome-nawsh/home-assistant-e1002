@@ -1,5 +1,5 @@
 name: E1002 Scheduler
-version: 0.2.3
+version: 0.2.5
 slug: e1002_scheduler
 description: Screens, schedules and sleep control for a battery e-paper display
 url: https://github.com/awesome-nawsh/home-assistant-e1002
@@ -25,6 +25,7 @@ options:
   awake_mah_per_wake: 1.5
   draw_mah: 1.0
   sleep_ma: 0.12
+  render_wait_ms: 3000
 schema:
   puppet_url: str
   timezone: str
@@ -34,3 +35,4 @@ schema:
   awake_mah_per_wake: float
   draw_mah: float
   sleep_ma: float
+  render_wait_ms: int

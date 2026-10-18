@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from render import blank, placeholder, render_screen
+from render import placeholder, render_screen, sleep_card
 from schedule import Store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -25,6 +25,7 @@ opts: dict[str, Any] = {
     "puppet_url": "http://0f1cc410-puppet:10000", "timezone": "Asia/Singapore", "width": 800, "height": 480,
     # battery model — rough defaults for the E1002's 2000 mAh pack; calibrate from real readings
     "battery_mah": 2000, "awake_mah_per_wake": 1.5, "draw_mah": 1.0, "sleep_ma": 0.12,
+    "render_wait_ms": 3000,   # default settle time before screenshot; per-screen override in the UI
 }
 if os.path.exists(OPTIONS_PATH):
     with open(OPTIONS_PATH) as f:
@@ -57,11 +58,11 @@ async def device_base_url() -> dict:
     return {"port": port, "url": f"http://homeassistant.local:{port}"}
 
 
-async def _render(screen: dict, force: bool = False) -> bytes:
+async def _render(screen: dict, force: bool = False, next_s: int = 0) -> bytes:
     ts, png = _cache.get(screen["id"], (0, b""))
     if not force and time.time() - ts < CACHE_TTL:
         return png
-    png = await render_screen(screen, opts["puppet_url"], W, H)
+    png = await render_screen(screen, opts["puppet_url"], W, H, int(opts.get("render_wait_ms", 3000)), next_s)
     _cache[screen["id"]] = (time.time(), png)
     return png
 
@@ -80,6 +81,7 @@ async def get_config(device: str = Query("e1002")):
     boundary = store.next_boundary()
     return {
         "default_dwell_min": store.data["default_dwell_min"],
+        "render_wait_ms": int(opts.get("render_wait_ms", 3000)),
         "fallback_screen": store.data.get("fallback_screen"),
         "night": store.data.get("night"),
         "screens": store.data["screens"],
@@ -149,17 +151,24 @@ async def preview(sid: str, force: bool = False):
 async def device_image(device: str = Query("e1002"), nav: str = Query("")):
     screen, how = store.pick_next(device, nav=nav if nav in ("next", "prev", "refresh") else "")
     if screen is None:
-        # night or idle with no fallback: blank the panel once, then tell the device
-        # there is nothing new (204) so it skips the e-paper refresh on later wakes
+        # night, or idle with no fallback: show the sleep card (moon + next wake time) once;
+        # on later wakes with the same next-wake time answer 204 so the panel isn't refreshed
+        now = store.now()
+        nxt = store.next_window_start(now)
+        if nxt and store.in_night(nxt):          # window starts inside night → first shown at night end
+            nxt = store.night_end(nxt)
+        title = "Sleeping" if how == "night" else "Nothing scheduled"
+        sub = f"Next screen {nxt:%a %H:%M}" if nxt else "No schedules set"
+        key = f"sleep:{title}:{sub}"
         last = (store.data["devices"].get(device) or {}).get("last_screen", "unset")
-        if last is None:
-            log.info("device %s -> already blank (%s), 204", device, how)
+        if last == key:
+            log.info("device %s -> sleep card unchanged (%s), 204", device, how)
             return Response(status_code=204)
-        store.mark_shown(device, None)
-        log.info("device %s -> blank (%s)", device, how)
-        return Response(blank(W, H), media_type="image/png", headers={"Cache-Control": "no-store"})
+        store.mark_shown(device, key)
+        log.info("device %s -> sleep card '%s / %s' (%s)", device, title, sub, how)
+        return Response(sleep_card(title, sub, W, H), media_type="image/png", headers={"Cache-Control": "no-store"})
     try:
-        png = await _render(screen)
+        png = await _render(screen, force=True, next_s=store.sleep_seconds(device)[0])
     except Exception as e:
         log.error("render %s failed: %s", screen["name"], e)
         png = placeholder(f"{screen['name']}: render failed", W, H)
