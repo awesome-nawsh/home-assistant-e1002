@@ -39,6 +39,12 @@ the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sl
 - Add-on: bump `version` in `addon/e1002-scheduler/config.yaml` and `CHANGELOG.md` for every release;
   HA only offers an Update when the version changes.
 
+## Before every commit
+- Run `python3 scripts/check.py` from the repo root; it must print ALL CHECKS PASSED. It catches empty
+  files, dropped features, stale leftovers, undefined UI ids, parse errors and version/changelog drift.
+- Edit the repo files in place (one source of truth). Never overwrite a repo file from a copy made earlier.
+- Never `open(f,'w')` before reading `f` — it truncates the file.
+
 ## Rules
 1. Don't assume; surface tradeoffs; ask before research-heavy changes.
 2. Minimum change. Touch only what you must.

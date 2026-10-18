@@ -1,3 +1,6 @@
+## 0.2.7
+- UI served with Cache-Control: no-store so updates show without a hard reload.
+
 ## 0.2.6
 - Per-screen dither: Floyd–Steinberg or none (nearest colour); global default option `dither`.
 

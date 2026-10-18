@@ -1,5 +1,5 @@
 name: E1002 Scheduler
-version: 0.2.6
+version: 0.2.7
 slug: e1002_scheduler
 description: Screens, schedules and sleep control for a battery e-paper display
 url: https://github.com/awesome-nawsh/home-assistant-e1002

@@ -72,7 +72,8 @@ async def _render(screen: dict, force: bool = False, next_s: int = 0) -> bytes:
 # ---------------- UI ----------------
 @app.get("/")
 async def index():
-    return FileResponse(os.path.join(STATIC, "index.html"))
+    # Ingress + browsers cache aggressively; always serve the current UI after an add-on update
+    return FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/config")
