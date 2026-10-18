@@ -88,6 +88,8 @@ class Store:
         d = s.get("dwell_min")
         if d is not None and (not isinstance(d, int) or d < DWELL_MIN or d > DWELL_MAX):
             errs.append(f"dwell must be {DWELL_MIN}–{DWELL_MAX} min or empty")
+        if s.get("dither") not in (None, "", "floyd", "none"):
+            errs.append("dither must be 'floyd', 'none' or empty")
         wm = s.get("wait_ms")
         if wm is not None and (not isinstance(wm, int) or wm < 500 or wm > 30000):
             errs.append("render wait must be 500–30000 ms or empty")
@@ -111,6 +113,7 @@ class Store:
             s.setdefault("windows", [])
             s.setdefault("dwell_min", None)
             s.setdefault("wait_ms", None)
+            s["dither"] = s.get("dither") or None
             s["name"] = s["name"].strip()
             s["target"] = s["target"].strip()
             errs = self.validate_screen(s)

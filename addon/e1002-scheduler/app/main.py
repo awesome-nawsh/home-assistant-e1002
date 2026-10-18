@@ -26,6 +26,7 @@ opts: dict[str, Any] = {
     # battery model — rough defaults for the E1002's 2000 mAh pack; calibrate from real readings
     "battery_mah": 2000, "awake_mah_per_wake": 1.5, "draw_mah": 1.0, "sleep_ma": 0.12,
     "render_wait_ms": 3000,   # default settle time before screenshot; per-screen override in the UI
+    "dither": "floyd",        # default dither: "floyd" (error diffusion) or "none" (nearest colour)
 }
 if os.path.exists(OPTIONS_PATH):
     with open(OPTIONS_PATH) as f:
@@ -62,7 +63,8 @@ async def _render(screen: dict, force: bool = False, next_s: int = 0) -> bytes:
     ts, png = _cache.get(screen["id"], (0, b""))
     if not force and time.time() - ts < CACHE_TTL:
         return png
-    png = await render_screen(screen, opts["puppet_url"], W, H, int(opts.get("render_wait_ms", 3000)), next_s)
+    png = await render_screen(screen, opts["puppet_url"], W, H, int(opts.get("render_wait_ms", 3000)), next_s,
+                              str(opts.get("dither", "floyd")))
     _cache[screen["id"]] = (time.time(), png)
     return png
 
@@ -82,6 +84,7 @@ async def get_config(device: str = Query("e1002")):
     return {
         "default_dwell_min": store.data["default_dwell_min"],
         "render_wait_ms": int(opts.get("render_wait_ms", 3000)),
+        "dither": str(opts.get("dither", "floyd")),
         "fallback_screen": store.data.get("fallback_screen"),
         "night": store.data.get("night"),
         "screens": store.data["screens"],

@@ -24,11 +24,17 @@ def _palette_image() -> Image.Image:
     return p
 
 
-def dither(png: bytes, w: int, h: int) -> bytes:
+DITHER_MODES = {
+    "floyd": Image.Dither.FLOYDSTEINBERG,   # error diffusion: best for photos, gradients, charts
+    "none": Image.Dither.NONE,              # nearest colour: crisp text and flat fills
+}
+
+
+def dither(png: bytes, w: int, h: int, mode: str = "floyd") -> bytes:
     img = Image.open(io.BytesIO(png)).convert("RGB")
     if img.size != (w, h):
         img = img.resize((w, h), Image.LANCZOS)
-    q = img.quantize(palette=_palette_image(), dither=Image.Dither.FLOYDSTEINBERG)
+    q = img.quantize(palette=_palette_image(), dither=DITHER_MODES.get(mode, Image.Dither.FLOYDSTEINBERG))
     out = io.BytesIO()
     q.convert("RGB").save(out, format="PNG", optimize=True)
     return out.getvalue()
@@ -79,13 +85,13 @@ async def render_url(url: str, w: int, h: int, wait_ms: int = 3000, timeout: flo
 
 
 async def render_screen(screen: dict, puppet_url: str, w: int, h: int, default_wait_ms: int = 3000,
-                        next_s: int = 0) -> bytes:
+                        next_s: int = 0, default_dither: str = "floyd") -> bytes:
     wait_ms = int(screen.get("wait_ms") or default_wait_ms)
     if screen["type"] == "ha":
         raw = await render_ha(puppet_url, screen["target"], w, h, wait_ms, next_s)
     else:
         raw = await render_url(screen["target"], w, h, wait_ms)
-    return dither(raw, w, h)
+    return dither(raw, w, h, screen.get("dither") or default_dither)
 
 
 def placeholder(text: str, w: int, h: int) -> bytes:

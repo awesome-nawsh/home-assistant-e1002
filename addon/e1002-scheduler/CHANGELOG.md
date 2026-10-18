@@ -1,3 +1,6 @@
+## 0.2.6
+- Per-screen dither: Floyd–Steinberg or none (nearest colour); global default option `dither`.
+
 ## 0.2.5
 - Per-screen render wait (ms) with a global default option `render_wait_ms` (3000); fixes half-drawn cards on cold renders.
 - Device fetches always render fresh and pass Puppet a `next=` hint so its browser stays warm.

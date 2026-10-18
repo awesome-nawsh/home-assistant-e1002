@@ -102,6 +102,12 @@
     <div class="row" style="margin-top:8px">
       <div><label>Dwell (min, 2–60, blank = default)</label><input type="number" id="fDwell" min="2" max="60" style="width:160px"></div>
       <div><label>Render wait (ms, blank = default)</label><input type="number" id="fWait" min="500" max="30000" step="500" style="width:160px" placeholder="3000"></div>
+      <div><label>Dither</label>
+        <select id="fDither">
+          <option value="">Default</option>
+          <option value="floyd">Floyd–Steinberg (photos, charts)</option>
+          <option value="none">None — nearest colour (crisp text)</option>
+        </select></div>
       <div><label>Enabled</label><input type="checkbox" id="fEnabled" checked></div>
     </div>
     <div style="margin-top:12px"><label>Schedule windows</label><div id="fWindows"></div>
@@ -235,6 +241,8 @@ function openEditor(id) {
   document.getElementById('fDwell').value = s.dwell_min ?? '';
   document.getElementById('fWait').value = s.wait_ms ?? '';
   document.getElementById('fWait').placeholder = cfg.render_wait_ms;
+  document.getElementById('fDither').value = s.dither || '';
+  document.getElementById('fDither').options[0].text = `Default (${cfg.dither==='none'?'none':'Floyd–Steinberg'})`;
   document.getElementById('fEnabled').checked = s.enabled !== false;
   document.getElementById('fErr').textContent = '';
   const w = document.getElementById('fWindows'); w.innerHTML = '';
@@ -276,6 +284,7 @@ async function saveScreen() {
     target: document.getElementById('fTarget').value,
     dwell_min: document.getElementById('fDwell').value ? +document.getElementById('fDwell').value : null,
     wait_ms: document.getElementById('fWait').value ? +document.getElementById('fWait').value : null,
+    dither: document.getElementById('fDither').value || null,
     enabled: document.getElementById('fEnabled').checked,
     windows,
   };
