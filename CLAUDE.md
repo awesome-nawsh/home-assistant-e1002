@@ -33,6 +33,12 @@ the Lovelace view in `dashboard.yaml`. Device wakes, fetches PNG, draws, deep-sl
 - Serial logs need `logger: hardware_uart: UART0`
 - Wi-Fi 2.4 GHz only
 
+## Versioning
+- Firmware: bump `fw_version` in `e1002-hallway.yaml` and add a changelog line at the top of the file
+  for every change that gets flashed. ESPHome `project.version` exposes it in HA device info and the boot log.
+- Add-on: bump `version` in `addon/e1002-scheduler/config.yaml` and `CHANGELOG.md` for every release;
+  HA only offers an Update when the version changes.
+
 ## Rules
 1. Don't assume; surface tradeoffs; ask before research-heavy changes.
 2. Minimum change. Touch only what you must.

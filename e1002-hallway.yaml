@@ -4,7 +4,13 @@
 #       → draw → POST battery report → GET /api/sleep → deep sleep that many seconds
 # Target: ESPHome 2026.9.x  |  Pins hardware-verified 2026-10-17
 # =============================================================================
+# Firmware changelog (bump fw_version with every change that gets flashed)
+#   1.3.0  Scheduler URL is a persisted text entity; 204 logged as "No new image"
+#   1.2.0  All three buttons wake: green=refresh, right=next, left=prev (ext1 wake + nav param)
+#   1.1.0  Image/sleep/report driven by the E1002 Scheduler add-on
+#   1.0.0  First working build: Puppet PNG via online_image, fixed 10-min deep sleep
 substitutions:
+  fw_version: "1.3.0"
   name: e1002-hallway
   friendly_name: "E1002 Hallway"
   device_id: e1002
@@ -17,6 +23,9 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  project:
+    name: awesome-nawsh.e1002-hallway
+    version: "${fw_version}"   # shown in HA device info and the boot log
   on_boot:
     - priority: 600
       then:
