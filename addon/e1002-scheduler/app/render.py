@@ -69,7 +69,7 @@ async def render_url(url: str, w: int, h: int, wait_ms: int = 3000, timeout: flo
         cmd = [
             CHROMIUM, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
             "--hide-scrollbars", "--force-device-scale-factor=1", f"--window-size={w},{h}",
-            f"--user-data-dir={td}/profile", f"--virtual-time-budget={int(wait_ms) + 2000}", f"--screenshot={out}", url,
+            f"--user-data-dir={td}/profile", f"--virtual-time-budget={max(8000, int(wait_ms) + 2000)}", f"--screenshot={out}", url,
         ]
         log.info("chromium %s", url)
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)

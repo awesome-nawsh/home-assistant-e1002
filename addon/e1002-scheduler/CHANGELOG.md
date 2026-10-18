@@ -1,3 +1,6 @@
+## 0.2.8
+- Web-URL screens: Chromium time budget is max(8 s, render wait + 2 s) — restores the original 8 s floor.
+
 ## 0.2.7
 - UI served with Cache-Control: no-store so updates show without a hard reload.
 
